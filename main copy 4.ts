@@ -1,7 +1,7 @@
-import { App, Editor, MarkdownView, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import axios from 'axios';
 import * as https from 'https';
-//import * as fs from 'fs';
+import * as fs from 'fs';
 //import * as path from 'path';
 // Импортируйте fetch из node-fetch
 //import fetch from 'electron-fetch';
@@ -9,9 +9,6 @@ import * as https from 'https';
 // Remember to rename these classes and interfaces!
 //import Agent from 'https';
 import * as childProcess from 'child_process';
-//import * as path from 'path';
-
-
 
 interface MyPluginSettings {
 	mySetting: string;
@@ -99,187 +96,105 @@ export default class MyPlugin extends Plugin {
 		this.startProxyServer();
 		// Проверяем доступность прокси-сервера при загрузке плагина
         const isProxyServerAvailable = await this.checkProxyServerAvailability();
+
         if (isProxyServerAvailable) {
             console.log('Proxy server is available.');
         } else {
             console.error('Proxy server is not available. Please check your configuration.');
         }
 	}
-	//запускаем прокси сервер
-    startProxyServer() {
-        //const proxyPath = path.resolve('C:\\Users\\skiner\\Documents\\OUTERHEAVEN\\GigaTest1\\.obsidian\\plugins\\GigaTest1\\proxy-server.mjs');
-		//@ts-ignore
-		const proxyPath = normalizePath(`${this.app.vault.adapter.basePath}/${'.obsidian/plugins/GigaTest1/proxy-server.mjs'}`);
-		const proxyProcess = childProcess.spawn('node', [proxyPath]);
-        proxyProcess.on('error', (err) => {
-			console.error('Error starting proxy server:', err);
-        });
-        console.log('Proxy server started successfully!');
-    }
 	// Функция для проверки доступности прокси-сервера
-	async checkProxyServerAvailability(): Promise<boolean> {
-		const proxyUrl = 'http://localhost:3000/api/v2/oauth'; 
+    async checkProxyServerAvailability(): Promise<boolean> {
+        const proxyUrl = 'http://localhost:3000/api/v2/oauth'; // Замените на ваш адрес прокси-сервера
+
+        try {
+            const response = await axios.head(proxyUrl);
+            return response.status === 200; // Если запрос успешен, возвращаем true
+        } catch (error) {
+            return false; // Если произошла ошибка, возвращаем false
+        }
+    }
+	//запускаем прокси сервер
+	startProxyServer() {
+		const proxyPath = 'D:\\proxy-server.js';
+		//const proxyPath = 'C:\\Users\\skiner\\Documents\\OUTERHEAVEN\\GigaTest1\\obsidian\\plugins\\GigaTest1\\proxy-server.mjs';  // Замените на фактический путь
+		const proxyProcess = childProcess.fork(proxyPath);
+	
+		proxyProcess.on('error', (err) => {
+			console.error('Error starting proxy server:', err);
+		});
+	
+		console.log('Proxy server started successfully!');
+	}
+
+	async getAccessToken2() {
+		//const proxyUrl = 'http://localhost:3000/api/v2/oauth'; // Замените на фактический адрес вашего прокси-сервера
+		const proxyUrl = 'http://localhost:3000/api/v2/oauth';
+		const headers = {
+			'Content-Type': 'application/x-www-form-urlencoded',
+			'Accept': 'application/json',
+			'RqUID': '89a05b68-c017-4799-a3a3-2a13acc0aa0f',
+			'Authorization': 'Basic N2NmY2YxOWEtOWJmOS00ZDJkLWI0YTEtNzhkMmI1YTAwNjU1Ojg5YTA1YjY4LWMwMTctNDc5OS1hM2EzLTJhMTNhY2MwYWEwZg==',
+		};
+		
+		const data = new URLSearchParams({
+			scope: 'GIGACHAT_API_PERS',
+		});
+	
+		//const certPath = 'C:\\Users\\skiner\\Documents\\OUTERHEAVEN\\russian_trusted_root_ca.cer';
+		const certPath = 'D:\\russian_trusted_root_ca.cer'; // Замените на фактический путь к сертификату
+		const certBuffer = fs.readFileSync(certPath);
+	
+		const axiosConfig = {
+			httpsAgent: new https.Agent({
+				ca: certBuffer,
+				rejectUnauthorized: false,
+			}),
+		};
 	
 		try {
-			const response = await axios.head(proxyUrl, { httpsAgent: new https.Agent({ rejectUnauthorized: false }) });
-			return response.status === 200;
+			const response = await axios.post(proxyUrl, new URLSearchParams(data), { headers, ...axiosConfig });
+			console.log('getAccessToken result:', response.data);
+			return response.data; // Возвращаем результат запроса
 		} catch (error) {
-			return false;
+			console.error('Error in getAccessToken:', error);
+			throw error; // Пробрасываем ошибку для обработки в вызывающем коде
 		}
 	}
-	//обработка текста
-	async processSelectText() {
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		if (activeView) {
-			const editor = activeView.editor;
-			const selectedText = editor.getSelection();
-		
-			if (selectedText.trim() !== '') {
-				try {
-					//отправка на обработку
-					//const gptResponse = await this.sendToChatGPT(selectedText);
-					const gigaResponse = await this.sendChatCompletionRequest(selectedText);
-					//const gigaResponse = await this.getAccessToken();
-					//вставка ответа
-					//editor.replaceSelection(gptResponse);
-					editor.replaceSelection(gigaResponse);
-					//втсавка строчкой ниже
-					const currentPosition = editor.getCursor();
-					//editor.replaceRange(gptResponse, currentPosition);
-					editor.replaceRange(gigaResponse, currentPosition);
-				} catch (error) {
-					console.error('Ошибка обработки текста: ', error);
-					new Notice('Ошибка обработки текста. Подробности в консоли');
-				}
-			}
-		}
-	}
-	async processSelectText2() {
-		const selectedText = 'добрый день';
-		try {
-			const gigaResponse = await this.sendChatCompletionRequest(selectedText);
-			console.log('Ответ от GigaChat', gigaResponse);
-		
-	} catch (error) {
-		console.error('Ошибка обработки текста: ', error);
-		new Notice('Ошибка обработки текста. Подробности в консоли');
-		}
-	}
-	async processSelectText3() {
-		const proxyUrl = 'http://localhost:3000/api/v2/oauth';
-		try {
-			//const response = await axios.post(proxyUrl, new URLSearchParams(data), { headers });
-			const response = await axios.post(proxyUrl);
-			//обработка полученного ответа и его разбивка на токен и время действия токена  
-			console.log('Ответ от GigaChat', response.data)
-		} catch (error) {
-			console.error('Error in processSelectText3', error);
-		}
-	}
-	async processSelectText4() {
-		const proxyUrl1 = 'http://localhost:3000/api/v2/oauth';
-		const proxyUrl2 = 'http://localhost:3000/api/v1/chat/completions';
-		try {
-			//const response = await axios.post(proxyUrl, new URLSearchParams(data), { headers });
-			const response = await axios.post(proxyUrl1);
-			//const mes = 'скажи котик';
-			//обработка полученного ответа и его разбивка на токен и время действия токена  
-			console.log('Токен от GigaChat', response.data)
-			if (response) {
-				const mes = 'скажи котик';
-				console.log('передача прокси серверу значения', mes)
-				//const answer = await axios.post(proxyUrl2, { request: mes}, { headers: { 'Content-Type': 'application/json', }, });
-				const answer = await axios.post(proxyUrl2, mes);
-				
-				//console.log('Ответ от GigaChat', answer.data);
-				//console.log('Ответ от GigaChat', answer.choices[0].message.content);
-				console.log('Ответ от GigaChat', answer.data.choices[0].message.content);
-			}
-			else {
-				console.log('Не удалось получить токен доступа.');
-			}
-		} 
 
-		catch (error) {
-			console.error('Error in processSelectText3', error);
-		}
-	}
-	//получение токена
 	async getAccessToken() {
 		// Используем URL прокси-сервера вместо API Sberbank
 		const proxyUrl = 'http://localhost:3000/api/v2/oauth'; // Замените на ваш адрес прокси-сервера
 		//const apiUrl = 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth';
-//		const headers = {
-//			'Content-Type': 'application/x-www-form-urlencoded',
-//			'Accept': 'application/json',
-//			'RqUID': '89a05b68-c017-4799-a3a3-2a13acc0aa0f',
-//			'Authorization': 'Basic N2NmY2YxOWEtOWJmOS00ZDJkLWI0YTEtNzhkMmI1YTAwNjU1Ojg5YTA1YjY4LWMwMTctNDc5OS1hM2EzLTJhMTNhY2MwYWEwZg==',
-//		};
-//	
-//		const data = new URLSearchParams({
-//			scope: 'GIGACHAT_API_PERS',
-//		});
+		const headers = {
+			'Content-Type': 'application/x-www-form-urlencoded',
+			'Accept': 'application/json',
+			'RqUID': '89a05b68-c017-4799-a3a3-2a13acc0aa0f',
+			'Authorization': 'Basic N2NmY2YxOWEtOWJmOS00ZDJkLWI0YTEtNzhkMmI1YTAwNjU1Ojg5YTA1YjY4LWMwMTctNDc5OS1hM2EzLTJhMTNhY2MwYWEwZg==',
+		};
+	
+		const data = new URLSearchParams({
+			scope: 'GIGACHAT_API_PERS',
+		});
 		// Здесь мы отправляем запрос не напрямую на API Sberbank, а на прокси-сервер
 		try {
-			//const response = await axios.post(proxyUrl, new URLSearchParams(data), { headers });
-			const response = await axios.post(proxyUrl);
-			//обработка полученного ответа и его разбивка на токен и время действия токена  
-			const { access_token, expires_at } = response.data;
-			console.log('getAccessToken Токен доступа:', access_token);
-			console.log('getAccessToken Токен действует: ', new Date(expires_at));
-			return access_token;
+			const response = await axios.post(proxyUrl, new URLSearchParams(data), { headers });
+			console.log('getAccessToken result:', response.data);
 		} catch (error) {
 			console.error('Error in getAccessToken:', error);
 		}
 	}
-	//общение с GigaChat
-	async sendChatCompletionRequest(messageContent: string) {
-		//получим токен из функции выше 
-		//const accessToken = await this.getAccessToken();
-		//работае через локальный прокси сервер
-		const proxyUrl = 'http://localhost:3000/api/v1/chat/completions';
-		//const apiUrl = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions';
-		//const requestData = {
-		//	model: 'GigaChat:latest',
-		//	messages: [
-		//		{
-		//			role: 'user',
-		//			content: messageContent,
-		//		},
-		//	],
-		//	temperature: 1.0,
-		//	top_p: 0.1,
-		//	n: 1,
-		//	stream: false,
-		//	max_tokens: 512,
-		//	repetition_penalty: 1,
-		//};
-		//const headers = {
-		//	'Content-Type': 'application/json',
-		//	'Accept': 'application/json',
-		//	'Authorization': `Bearer ${accessToken}`,
-		//};
-		//const axiosConfig = {
-		//	headers,
-		//	httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-		//};
-		try {
-			//const response = await axios.post(proxyUrl, requestData, axiosConfig);
-			const response = await axios.post(proxyUrl);
-			return response.data;
-		} catch (error) {
-			console.error('Error:', error.message);
-			return null;
-		}
-	}
+
+
+
 	addContextMenu() {
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu, file) => {
 				menu.addItem((item) => {
-					item.setTitle('Обработать текст в GigaChat');
+					item.setTitle('Обработать текст в ChatGPT');
 					item.setIcon('Keyboard');
 					item.onClick(async () => {
-						await this.processSelectText();
+						//await this.processSelectText();
 					});
 				});
 				menu.addItem((item) => {
@@ -292,7 +207,7 @@ export default class MyPlugin extends Plugin {
 							const result = await this.getAccessToken();
 				
 							// Выводим результат в консоль
-							console.log('результат нажатия на кнопку Получить токен result:', result);
+							console.log('getAccessToken result:', result);
 				
 							// Теперь вы можете добавить логику обработки результата, если это необходимо
 						} catch (error) {
@@ -301,31 +216,9 @@ export default class MyPlugin extends Plugin {
 						}
 					});
 				});
-				menu.addItem((item) => {
-					item.setTitle('GigaChat');
-					item.setIcon('Keyboard');
-					item.onClick(async () => {
-						await this.processSelectText2();
-					});
-				});
-				menu.addItem((item) => {
-					item.setTitle('Test1');
-					item.setIcon('Keyboard');
-					item.onClick(async () => {
-						await this.processSelectText3();
-					});
-				});
-				menu.addItem((item) => {
-					item.setTitle('Test2');
-					item.setIcon('Keyboard');
-					item.onClick(async () => {
-						await this.processSelectText4();
-					});
-				});
 			})
 		);
 	}
-
 
 	onunload() {
 
